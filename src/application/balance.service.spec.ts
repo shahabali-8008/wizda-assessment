@@ -69,6 +69,58 @@ describe('BalanceService', () => {
     const row = await service.reconcileFromHcm(e1, l1);
     expect(row.daysRemaining).toBe(4);
   });
+
+  it('listForEmployee returns rows ordered by location', async () => {
+    const e1 = '66666666-6666-4666-8666-666666666666';
+    const l1 = '77777777-7777-4777-8777-777777777777';
+    const l2 = '88888888-8888-4888-8888-888888888888';
+    await seedFk(module, e1, l1);
+    const ds = module.get(DataSource);
+    const lr = ds.getRepository(Location);
+    await lr.save(
+      lr.create({
+        id: l2,
+        code: 'LOC88888',
+        name: 'Second',
+      }),
+    );
+
+    await service.ingestFromHcm([
+      { employeeId: e1, locationId: l2, daysRemaining: 1 },
+      { employeeId: e1, locationId: l1, daysRemaining: 2 },
+    ]);
+
+    const list = await service.listForEmployee(e1);
+    expect(list.map((r) => r.locationId)).toEqual([l1, l2]);
+  });
+
+  it('ingestFromHcm updates existing balance row', async () => {
+    const e1 = '99999999-9999-4999-8999-999999999999';
+    const l1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    await seedFk(module, e1, l1);
+
+    await service.ingestFromHcm([
+      { employeeId: e1, locationId: l1, daysRemaining: 10 },
+    ]);
+    const second = await service.ingestFromHcm([
+      { employeeId: e1, locationId: l1, daysRemaining: 3 },
+    ]);
+
+    expect(second[0].daysRemaining).toBe(3);
+    expect(mockHcm.peek(e1, l1)).toBe(3);
+  });
+
+  it('reconcileFromHcm creates row when cache missing but HCM has balance', async () => {
+    const e1 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const l1 = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    await seedFk(module, e1, l1);
+    await mockHcm.applyBatch([
+      { employeeId: e1, locationId: l1, daysRemaining: 8 },
+    ]);
+
+    const row = await service.reconcileFromHcm(e1, l1);
+    expect(row.daysRemaining).toBe(8);
+  });
 });
 
 async function seedFk(

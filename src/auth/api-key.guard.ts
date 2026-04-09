@@ -28,6 +28,14 @@ export class ApiKeyGuard implements CanActivate {
       return true;
     }
 
+    /** Static dev UI (same origin as GraphQL); no secrets in HTML/JS. */
+    if (context.getType() === 'http') {
+      const req = context.switchToHttp().getRequest<Request>();
+      if (req.method === 'GET' && this.isDevUiPublicPath(req.path)) {
+        return true;
+      }
+    }
+
     const required = this.config.get<string>('API_KEY');
     if (!required?.trim()) {
       return true;
@@ -49,6 +57,13 @@ export class ApiKeyGuard implements CanActivate {
       return gql.getContext<{ req: Request }>().req;
     }
     return context.switchToHttp().getRequest<Request>();
+  }
+
+  private isDevUiPublicPath(path: string): boolean {
+    if (path === '/' || path === '/index.html') {
+      return true;
+    }
+    return path === '/app.js' || path === '/styles.css';
   }
 
   private extractKey(req: Request): string | undefined {

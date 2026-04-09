@@ -34,15 +34,18 @@ input IngestHcmBatchInput {
 }
 
 type Mutation {
+  approveTimeOffRequest(id: ID!): TimeOffRequest!
   cancelTimeOffRequest(id: ID!): TimeOffRequest!
   createTimeOffRequest(input: CreateTimeOffInput!): TimeOffRequest!
   ingestHcmBatch(input: IngestHcmBatchInput!): [Balance!]!
+  rejectTimeOffRequest(id: ID!): TimeOffRequest!
   submitTimeOffRequest(id: ID!): TimeOffRequest!
 }
 
 type Query {
   balance(employeeId: ID!, locationId: ID!): Balance
   balances(employeeId: ID!): [Balance!]!
+  pendingTimeOffRequests(locationId: ID): [TimeOffRequest!]!
   ping: String!
   timeOffRequest(id: ID!): TimeOffRequest
   timeOffRequests(employeeId: ID!): [TimeOffRequest!]!
@@ -66,6 +69,7 @@ enum TimeOffRequestStatus {
   CANCELLED
   DRAFT
   PENDING_HCM
+  PENDING_MANAGER
   REJECTED
   SUBMITTED
 }

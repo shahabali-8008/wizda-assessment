@@ -1,8 +1,8 @@
 import type { HcmBalanceRow, HcmSubmitResult } from './hcm.types';
 
 /**
- * Port for the external HCM. Production implementation would call HTTP APIs;
- * tests and local dev use {@link MockHcmService}.
+ * Port for the external HCM. Production would call HTTP APIs; local dev uses
+ * {@link MockHcmService} or {@link HttpHcmService} when `HCM_BASE_URL` is set.
  */
 export abstract class HcmClient {
   /** Current balance in days for the dimension, per HCM. */

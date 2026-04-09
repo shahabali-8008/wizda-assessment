@@ -3,10 +3,17 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { ApplicationModule } from '../application/application.module';
+import { BalanceResolver } from './balance.resolver';
+import { registerGraphQlEnums } from './register-enums';
 import { RootResolver } from './root.resolver';
+import { TimeOffRequestResolver } from './time-off-request.resolver';
+
+registerGraphQlEnums();
 
 @Module({
   imports: [
+    ApplicationModule,
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
       imports: [ConfigModule],
@@ -21,6 +28,6 @@ import { RootResolver } from './root.resolver';
       },
     }),
   ],
-  providers: [RootResolver],
+  providers: [RootResolver, BalanceResolver, TimeOffRequestResolver],
 })
 export class AppGraphqlModule {}

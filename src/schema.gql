@@ -2,6 +2,70 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+type Balance {
+  daysRemaining: Float!
+  employeeId: ID!
+  lastSyncedAt: DateTime
+  locationId: ID!
+}
+
+input CreateTimeOffInput {
+  employeeId: ID!
+  endDate: String!
+  idempotencyKey: String
+  locationId: ID!
+  requestedDays: Float!
+  startDate: String!
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+input HcmBalanceRowInput {
+  daysRemaining: Float!
+  employeeId: ID!
+  locationId: ID!
+}
+
+input IngestHcmBatchInput {
+  rows: [HcmBalanceRowInput!]!
+}
+
+type Mutation {
+  cancelTimeOffRequest(id: ID!): TimeOffRequest!
+  createTimeOffRequest(input: CreateTimeOffInput!): TimeOffRequest!
+  ingestHcmBatch(input: IngestHcmBatchInput!): [Balance!]!
+  submitTimeOffRequest(id: ID!): TimeOffRequest!
+}
+
 type Query {
-  service: String!
+  balance(employeeId: ID!, locationId: ID!): Balance
+  balances(employeeId: ID!): [Balance!]!
+  ping: String!
+  timeOffRequest(id: ID!): TimeOffRequest
+  timeOffRequests(employeeId: ID!): [TimeOffRequest!]!
+}
+
+type TimeOffRequest {
+  createdAt: DateTime!
+  employeeId: ID!
+  endDate: String!
+  id: ID!
+  idempotencyKey: String
+  locationId: ID!
+  requestedDays: Float!
+  startDate: String!
+  status: TimeOffRequestStatus!
+  updatedAt: DateTime!
+}
+
+enum TimeOffRequestStatus {
+  APPROVED
+  CANCELLED
+  DRAFT
+  PENDING_HCM
+  REJECTED
+  SUBMITTED
 }

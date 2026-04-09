@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Time-Off API — dev console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Time-Off API — dev console</h1>
+        <p>
+          Served by the Nest app. Open this page while
+          <code>npm run start:dev</code> is running. Set <strong>API key</strong> if
+          <code>API_KEY</code> is set in the environment. Use IDs from
+          <code>npm run seed</code> or create employees/locations via your DB.
+        </p>
+      </header>
+
+      <section class="panel">
+        <h2>Connection</h2>
+        <div class="row">
+          <label class="w-full" style="flex: 1; min-width: 200px">
+            <span class="key">GraphQL URL</span>
+            <input id="graphqlUrl" class="w-full" type="url" autocomplete="off" />
+          </label>
+        </div>
+        <div class="row">
+          <label class="w-full" style="flex: 1; min-width: 200px">
+            <span class="key">Health URL</span>
+            <input id="healthUrl" class="w-full" type="url" autocomplete="off" />
+          </label>
+        </div>
+        <div class="row">
+          <label class="w-full" style="flex: 1; min-width: 200px">
+            <span class="key">X-Api-Key (optional)</span>
+            <input
+              id="apiKey"
+              class="w-full"
+              type="password"
+              autocomplete="off"
+              placeholder="Leave empty if API_KEY is unset"
+            />
+          </label>
+        </div>
+        <div class="row">
+          <button type="button" class="btn" id="btnPing">Ping (GraphQL)</button>
+          <button type="button" class="btn secondary" id="btnHealth">GET /health</button>
+        </div>
+        <pre id="outConnection" class="response-out muted" aria-live="polite">
+Response from Ping or GET /health appears here.</pre>
+      </section>
+
+      <section class="panel">
+        <h2>HCM batch → cache</h2>
+        <label>
+          <span class="key">Ingest rows (JSON array)</span>
+          <textarea id="ingestJson" class="code" spellcheck="false">
+[
+  {
+    "employeeId": "PASTE-EMPLOYEE-UUID",
+    "locationId": "PASTE-LOCATION-UUID",
+    "daysRemaining": 10
+  }
+]</textarea>
+        </label>
+        <div class="row" style="margin-top: 0.75rem">
+          <button type="button" class="btn" id="btnIngest">ingestHcmBatch</button>
+        </div>
+        <pre id="outIngest" class="response-out muted" aria-live="polite">
+ingestHcmBatch response appears here.</pre>
+      </section>
+
+      <section class="panel">
+        <h2>Balances</h2>
+        <div class="grid-2">
+          <label>
+            <span class="key">Employee ID (UUID)</span>
+            <input id="qEmployee" class="w-full" placeholder="employeeId" />
+          </label>
+          <label>
+            <span class="key">Location ID (UUID)</span>
+            <input id="qLocation" class="w-full" placeholder="locationId" />
+          </label>
+        </div>
+        <div class="row">
+          <button type="button" class="btn" id="btnBalances">balances(employeeId)</button>
+          <button type="button" class="btn secondary" id="btnBalanceOne">balance(employee, location)</button>
+          <button type="button" class="btn secondary" id="btnListReq">timeOffRequests</button>
+        </div>
+        <pre id="outBalances" class="response-out muted" aria-live="polite">
+Balance / list responses appear here.</pre>
+      </section>
+
+      <section class="panel">
+        <h2>Time-off request</h2>
+        <div class="grid-2">
+          <label>
+            <span class="key">Employee ID</span>
+            <input id="cEmployee" class="w-full" />
+          </label>
+          <label>
+            <span class="key">Location ID</span>
+            <input id="cLocation" class="w-full" />
+          </label>
+          <label>
+            <span class="key">Start date</span>
+            <input id="cStart" class="w-full" type="date" value="2026-08-01" />
+          </label>
+          <label>
+            <span class="key">End date</span>
+            <input id="cEnd" class="w-full" type="date" value="2026-08-02" />
+          </label>
+          <label>
+            <span class="key">Requested days</span>
+            <input id="cDays" class="w-full" type="number" step="0.5" value="2" />
+          </label>
+          <label>
+            <span class="key">Idempotency key (optional)</span>
+            <input id="cIdem" class="w-full" placeholder="optional" />
+          </label>
+        </div>
+        <div class="row" style="margin-top: 0.75rem">
+          <button type="button" class="btn" id="btnCreate">createTimeOffRequest</button>
+        </div>
+        <label style="margin-top: 0.75rem; display: block">
+          <span class="key">Request ID (filled after create)</span>
+          <input id="reqId" class="w-full" placeholder="UUID" />
+        </label>
+        <div class="row" style="margin-top: 0.65rem">
+          <button type="button" class="btn" id="btnSubmit">submitTimeOffRequest</button>
+          <button type="button" class="btn secondary" id="btnCancel">cancelTimeOffRequest</button>
+          <button type="button" class="btn secondary" id="btnGetReq">timeOffRequest</button>
+        </div>
+        <pre id="outRequest" class="response-out muted" aria-live="polite">
+Create / submit / cancel / get responses appear here.</pre>
+      </section>
+
+      <section class="panel">
+        <h2>Manager queue</h2>
+        <div class="row">
+          <label style="flex: 1; min-width: 200px">
+            <span class="key">Filter by locationId (optional)</span>
+            <input id="pendingLoc" class="w-full" placeholder="omit = all locations" />
+          </label>
+        </div>
+        <div class="row">
+          <button type="button" class="btn" id="btnPending">pendingTimeOffRequests</button>
+        </div>
+        <label style="margin-top: 0.65rem; display: block">
+          <span class="key">Request ID to approve or reject</span>
+          <span class="subkey"
+            >Run <strong>pendingTimeOffRequests</strong> first, then paste one <code>id</code> from the
+            response (<code>data.pendingTimeOffRequests[].id</code>).</span
+          >
+          <input
+            id="managerReqId"
+            class="w-full"
+            style="margin-top: 0.35rem"
+            placeholder="UUID from pending response"
+            autocomplete="off"
+          />
+        </label>
+        <div class="row" style="margin-top: 0.65rem">
+          <button type="button" class="btn" id="btnApprove">approveTimeOffRequest</button>
+          <button type="button" class="btn secondary" id="btnReject">rejectTimeOffRequest</button>
+        </div>
+        <p class="hint">
+          Flow: pending → paste the request <strong>id</strong> you are acting on → approve or reject.
+          Re-check <strong>balance</strong> after approve.
+        </p>
+        <pre id="outManager" class="response-out muted" aria-live="polite">
+Manager queue responses appear here.</pre>
+      </section>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>

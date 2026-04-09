@@ -1,5 +1,7 @@
 **Time-Off API** — see the repository root [`README.md`](../README.md) for project context and assessment notes.
 
+Optional **HTTP mock HCM** (second process): `npm run mock-hcm:http` — then set `HCM_BASE_URL=http://127.0.0.1:3099` in `.env`.
+
 ---
 
 <p align="center">

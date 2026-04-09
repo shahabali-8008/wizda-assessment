@@ -59,7 +59,7 @@ describe('GraphQL time-off flow (e2e)', () => {
     await app.close();
   });
 
-  it('ingest → create → submit → balance reflects deduction', async () => {
+  it('ingest → create → submit → approve → balance reflects deduction', async () => {
     const ingest = await request(app.getHttpServer())
       .post('/graphql')
       .send({
@@ -129,7 +129,47 @@ describe('GraphQL time-off flow (e2e)', () => {
       data?: { submitTimeOffRequest: { status: string } };
     };
     expect(submitBody.errors).toBeUndefined();
-    expect(submitBody.data!.submitTimeOffRequest.status).toBe('APPROVED');
+    expect(submitBody.data!.submitTimeOffRequest.status).toBe(
+      'PENDING_MANAGER',
+    );
+
+    const pending = await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: `
+          query Pending($loc: ID) {
+            pendingTimeOffRequests(locationId: $loc) { id status }
+          }
+        `,
+        variables: { loc: locationId },
+      });
+    expect(pending.status).toBe(200);
+    const pendingBody = pending.body as {
+      errors?: unknown;
+      data?: { pendingTimeOffRequests: { id: string }[] };
+    };
+    expect(pendingBody.errors).toBeUndefined();
+    expect(
+      pendingBody.data!.pendingTimeOffRequests.some((r) => r.id === requestId),
+    ).toBe(true);
+
+    const approve = await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: `
+          mutation Approve($id: ID!) {
+            approveTimeOffRequest(id: $id) { status }
+          }
+        `,
+        variables: { id: requestId },
+      });
+    expect(approve.status).toBe(200);
+    const approveBody = approve.body as {
+      errors?: unknown;
+      data?: { approveTimeOffRequest: { status: string } };
+    };
+    expect(approveBody.errors).toBeUndefined();
+    expect(approveBody.data!.approveTimeOffRequest.status).toBe('APPROVED');
 
     const bal = await request(app.getHttpServer())
       .post('/graphql')
@@ -148,5 +188,55 @@ describe('GraphQL time-off flow (e2e)', () => {
     };
     expect(balBody.errors).toBeUndefined();
     expect(balBody.data!.balance.daysRemaining).toBe(8);
+  });
+
+  it('second ingest simulates independent HCM balance change', async () => {
+    await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: `
+          mutation Ingest($input: IngestHcmBatchInput!) {
+            ingestHcmBatch(input: $input) { daysRemaining }
+          }
+        `,
+        variables: {
+          input: {
+            rows: [{ employeeId, locationId, daysRemaining: 10 }],
+          },
+        },
+      });
+
+    await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: `
+          mutation Ingest($input: IngestHcmBatchInput!) {
+            ingestHcmBatch(input: $input) { daysRemaining }
+          }
+        `,
+        variables: {
+          input: {
+            rows: [{ employeeId, locationId, daysRemaining: 15 }],
+          },
+        },
+      });
+
+    const bal = await request(app.getHttpServer())
+      .post('/graphql')
+      .send({
+        query: `
+          query B($e: ID!, $l: ID!) {
+            balance(employeeId: $e, locationId: $l) { daysRemaining }
+          }
+        `,
+        variables: { e: employeeId, l: locationId },
+      });
+    expect(bal.status).toBe(200);
+    const balBody = bal.body as {
+      errors?: unknown;
+      data?: { balance: { daysRemaining: number } };
+    };
+    expect(balBody.errors).toBeUndefined();
+    expect(balBody.data!.balance.daysRemaining).toBe(15);
   });
 });

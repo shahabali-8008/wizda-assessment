@@ -1,11 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 import request from 'supertest';
-import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 
 describe('Health (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: NestExpressApplication;
 
   beforeAll(() => {
     delete process.env.API_KEY;
@@ -19,7 +20,8 @@ describe('Health (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
-    app = moduleFixture.createNestApplication();
+    app = moduleFixture.createNestApplication<NestExpressApplication>();
+    app.useStaticAssets(join(__dirname, '..', 'ui'), { index: ['index.html'] });
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -37,6 +39,16 @@ describe('Health (e2e)', () => {
       .expect(200)
       .expect((res) => {
         expect(res.body).toEqual({ status: 'ok' });
+      });
+  });
+
+  it('GET / serves dev UI', () => {
+    return request(app.getHttpServer())
+      .get('/')
+      .expect(200)
+      .expect('Content-Type', /html/)
+      .expect((res) => {
+        expect(res.text).toContain('Time-Off API');
       });
   });
 

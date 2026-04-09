@@ -47,7 +47,7 @@ describe('TimeOffRequestService', () => {
     ]);
   });
 
-  it('createDraft then submit approves and updates cache', async () => {
+  it('createDraft then submit queues manager; managerApprove updates cache', async () => {
     const draft = await service.createDraft({
       employeeId: empId,
       locationId: locId,
@@ -58,14 +58,20 @@ describe('TimeOffRequestService', () => {
 
     expect(draft.status).toBe(TimeOffRequestStatus.DRAFT);
 
-    const submitted = await service.submit(draft.id);
-    expect(submitted.status).toBe(TimeOffRequestStatus.APPROVED);
+    const pending = await service.submit(draft.id);
+    expect(pending.status).toBe(TimeOffRequestStatus.PENDING_MANAGER);
+
+    const pendingList = await service.listPendingForManager(locId);
+    expect(pendingList.some((r) => r.id === draft.id)).toBe(true);
+
+    const approved = await service.managerApprove(draft.id);
+    expect(approved.status).toBe(TimeOffRequestStatus.APPROVED);
 
     const bal = await balanceService.findOne(empId, locId);
     expect(bal?.daysRemaining).toBe(8);
   });
 
-  it('submit rejects when insufficient HCM balance', async () => {
+  it('submit rejects when insufficient HCM balance (before manager)', async () => {
     await balanceService.ingestFromHcm([
       { employeeId: empId, locationId: locId, daysRemaining: 1 },
     ]);
@@ -82,7 +88,23 @@ describe('TimeOffRequestService', () => {
     expect(submitted.status).toBe(TimeOffRequestStatus.REJECTED);
   });
 
-  it('submit rejects when HCM_FORCE_REJECT', async () => {
+  it('managerReject leaves HCM balance unchanged', async () => {
+    const draft = await service.createDraft({
+      employeeId: empId,
+      locationId: locId,
+      startDate: '2026-06-01',
+      endDate: '2026-06-02',
+      requestedDays: 2,
+    });
+    await service.submit(draft.id);
+    const rejected = await service.managerReject(draft.id);
+    expect(rejected.status).toBe(TimeOffRequestStatus.REJECTED);
+
+    const bal = await balanceService.findOne(empId, locId);
+    expect(bal?.daysRemaining).toBe(10);
+  });
+
+  it('managerApprove rejects when HCM_FORCE_REJECT', async () => {
     process.env.HCM_FORCE_REJECT = 'true';
 
     const module: TestingModule = await Test.createTestingModule({
@@ -116,11 +138,12 @@ describe('TimeOffRequestService', () => {
       requestedDays: 1,
     });
 
-    const submitted = await svc.submit(draft.id);
-    expect(submitted.status).toBe(TimeOffRequestStatus.REJECTED);
+    await svc.submit(draft.id);
+    const after = await svc.managerApprove(draft.id);
+    expect(after.status).toBe(TimeOffRequestStatus.REJECTED);
   });
 
-  it('submit rejects on silent bad success from HCM', async () => {
+  it('managerApprove rejects on silent bad success from HCM', async () => {
     process.env.HCM_SILENT_BAD_SUCCESS = 'true';
 
     const module: TestingModule = await Test.createTestingModule({
@@ -154,8 +177,9 @@ describe('TimeOffRequestService', () => {
       requestedDays: 2,
     });
 
-    const submitted = await svc.submit(draft.id);
-    expect(submitted.status).toBe(TimeOffRequestStatus.REJECTED);
+    await svc.submit(draft.id);
+    const after = await svc.managerApprove(draft.id);
+    expect(after.status).toBe(TimeOffRequestStatus.REJECTED);
   });
 
   it('createDraft is idempotent by idempotencyKey', async () => {

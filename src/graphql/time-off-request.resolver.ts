@@ -40,6 +40,19 @@ export class TimeOffRequestResolver {
     return rows.map(toGql);
   }
 
+  @Query(() => [TimeOffRequestGql], { name: 'pendingTimeOffRequests' })
+  async pendingTimeOffRequests(
+    @Args(
+      'locationId',
+      { type: () => ID, nullable: true },
+      new ParseUUIDPipe({ optional: true }),
+    )
+    locationId?: string,
+  ): Promise<TimeOffRequestGql[]> {
+    const rows = await this.timeOff.listPendingForManager(locationId);
+    return rows.map(toGql);
+  }
+
   @Mutation(() => TimeOffRequestGql, { name: 'createTimeOffRequest' })
   async createTimeOffRequest(
     @Args('input') input: CreateTimeOffInput,
@@ -68,6 +81,22 @@ export class TimeOffRequestResolver {
     @Args('id', { type: () => ID }, ParseUUIDPipe) id: string,
   ): Promise<TimeOffRequestGql> {
     const row = await this.timeOff.cancel(id);
+    return toGql(row);
+  }
+
+  @Mutation(() => TimeOffRequestGql, { name: 'approveTimeOffRequest' })
+  async approveTimeOffRequest(
+    @Args('id', { type: () => ID }, ParseUUIDPipe) id: string,
+  ): Promise<TimeOffRequestGql> {
+    const row = await this.timeOff.managerApprove(id);
+    return toGql(row);
+  }
+
+  @Mutation(() => TimeOffRequestGql, { name: 'rejectTimeOffRequest' })
+  async rejectTimeOffRequest(
+    @Args('id', { type: () => ID }, ParseUUIDPipe) id: string,
+  ): Promise<TimeOffRequestGql> {
+    const row = await this.timeOff.managerReject(id);
     return toGql(row);
   }
 }

@@ -45,6 +45,19 @@ export class TimeOffRequestService {
     });
   }
 
+  /**
+   * Requests waiting for manager action (optional filter by location).
+   */
+  async listPendingForManager(locationId?: string): Promise<TimeOffRequest[]> {
+    const qb = this.requests
+      .createQueryBuilder('r')
+      .where('r.status = :s', { s: TimeOffRequestStatus.PENDING_MANAGER });
+    if (locationId) {
+      qb.andWhere('r.locationId = :lid', { lid: locationId });
+    }
+    return qb.orderBy('r.createdAt', 'ASC').getMany();
+  }
+
   async createDraft(input: CreateTimeOffParams): Promise<TimeOffRequest> {
     if (input.idempotencyKey) {
       const existing = await this.requests.findOne({
@@ -83,12 +96,35 @@ export class TimeOffRequestService {
   }
 
   /**
-   * Submits to HCM: reconciles cache, deducts via HCM, rejects on failure or silent inconsistency.
+   * Employee submit: reconciles with HCM, rejects if insufficient balance, else PENDING_MANAGER.
    */
   async submit(id: string): Promise<TimeOffRequest> {
     const req = await this.requireRequest(id);
     if (req.status !== TimeOffRequestStatus.DRAFT) {
       throw new BadRequestException('Only DRAFT requests can be submitted');
+    }
+    await this.balances.reconcileFromHcm(req.employeeId, req.locationId);
+    const hcmBalance = await this.hcm.getBalance(
+      req.employeeId,
+      req.locationId,
+    );
+    if (hcmBalance < req.requestedDays) {
+      req.status = TimeOffRequestStatus.REJECTED;
+      return this.requests.save(req);
+    }
+    req.status = TimeOffRequestStatus.PENDING_MANAGER;
+    return this.requests.save(req);
+  }
+
+  /**
+   * Manager approve: runs HCM deduction flow (reconcile, deduct, defensive post-check).
+   */
+  async managerApprove(id: string): Promise<TimeOffRequest> {
+    const req = await this.requireRequest(id);
+    if (req.status !== TimeOffRequestStatus.PENDING_MANAGER) {
+      throw new BadRequestException(
+        'Only PENDING_MANAGER requests can be approved to HCM',
+      );
     }
     req.status = TimeOffRequestStatus.PENDING_HCM;
     await this.requests.save(req);
@@ -120,7 +156,6 @@ export class TimeOffRequestService {
       );
       const expected = hcmBefore - req.requestedDays;
       if (Math.abs(hcmAfter - expected) > 1e-6) {
-        // Defensive: HCM claimed success but balance does not match expectation.
         req.status = TimeOffRequestStatus.REJECTED;
         return this.requests.save(req);
       }
@@ -133,6 +168,18 @@ export class TimeOffRequestService {
       await this.requests.save(req);
       throw err;
     }
+  }
+
+  /** Manager reject before HCM (no deduction). */
+  async managerReject(id: string): Promise<TimeOffRequest> {
+    const req = await this.requireRequest(id);
+    if (req.status !== TimeOffRequestStatus.PENDING_MANAGER) {
+      throw new BadRequestException(
+        'Only PENDING_MANAGER requests can be rejected by manager',
+      );
+    }
+    req.status = TimeOffRequestStatus.REJECTED;
+    return this.requests.save(req);
   }
 
   private async requireRequest(id: string): Promise<TimeOffRequest> {

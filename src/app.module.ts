@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './database/database.module';
+import { DomainModule } from './domain/domain.module';
 import { AppGraphqlModule } from './graphql/graphql.module';
 import { HealthModule } from './health/health.module';
 
@@ -11,6 +12,7 @@ import { HealthModule } from './health/health.module';
       envFilePath: ['.env.local', '.env'],
     }),
     DatabaseModule,
+    DomainModule,
     AppGraphqlModule,
     HealthModule,
   ],

@@ -1,0 +1,8 @@
+export enum TimeOffRequestStatus {
+  DRAFT = 'DRAFT',
+  SUBMITTED = 'SUBMITTED',
+  PENDING_HCM = 'PENDING_HCM',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  CANCELLED = 'CANCELLED',
+}

@@ -13,6 +13,7 @@ describe('GraphQL time-off flow (e2e)', () => {
   let locationId: string;
 
   beforeAll(() => {
+    delete process.env.API_KEY;
     process.env.DATABASE_PATH = ':memory:';
     process.env.TYPEORM_SYNC = 'false';
     process.env.TYPEORM_MIGRATIONS_RUN = 'true';

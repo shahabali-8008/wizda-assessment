@@ -8,6 +8,7 @@ describe('Health (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeAll(() => {
+    delete process.env.API_KEY;
     process.env.DATABASE_PATH = ':memory:';
     process.env.TYPEORM_SYNC = 'false';
     process.env.TYPEORM_MIGRATIONS_RUN = 'true';

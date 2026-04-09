@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Balance } from '../../domain/entities/balance.entity';
 import { Employee } from '../../domain/entities/employee.entity';
 import { Location } from '../../domain/entities/location.entity';
+import { HcmClient } from '../../hcm/hcm.client';
 
 /**
  * Idempotent demo data for local development (not for production).
@@ -19,6 +20,7 @@ export class SeedService {
     private readonly locations: Repository<Location>,
     @InjectRepository(Balance)
     private readonly balances: Repository<Balance>,
+    private readonly hcm: HcmClient,
   ) {}
 
   async run(): Promise<void> {
@@ -36,7 +38,18 @@ export class SeedService {
     await this.upsertBalance(alice.id, locSfo.id, 5);
     await this.upsertBalance(bob.id, locNyc.id, 15);
 
-    this.logger.log('Seed complete (employees, locations, balances).');
+    const rows = await this.balances.find();
+    await this.hcm.applyBatch(
+      rows.map((b) => ({
+        employeeId: b.employeeId,
+        locationId: b.locationId,
+        daysRemaining: b.daysRemaining,
+      })),
+    );
+
+    this.logger.log(
+      'Seed complete (employees, locations, balances, HCM mock).',
+    );
   }
 
   private async upsertLocation(code: string, name: string): Promise<Location> {

@@ -39,6 +39,21 @@ describe('Health (e2e)', () => {
       });
   });
 
+  it('POST /graphql ping', () => {
+    return request(app.getHttpServer())
+      .post('/graphql')
+      .send({ query: '{ ping }' })
+      .expect(200)
+      .expect((res) => {
+        const body = res.body as {
+          errors?: unknown;
+          data?: { ping?: string };
+        };
+        expect(body.errors).toBeUndefined();
+        expect(body.data?.ping).toBe('pong');
+      });
+  });
+
   afterEach(async () => {
     await app.close();
   });

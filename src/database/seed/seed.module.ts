@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from '../database.module';
 import { DomainModule } from '../../domain/domain.module';
+import { HcmModule } from '../../hcm/hcm.module';
 import { SeedService } from './seed.service';
 
 @Module({
@@ -12,6 +13,7 @@ import { SeedService } from './seed.service';
     }),
     DatabaseModule,
     DomainModule,
+    HcmModule,
   ],
   providers: [SeedService],
 })

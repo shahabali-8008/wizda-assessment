@@ -1,8 +1,10 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HcmClient } from './hcm.client';
 import { HttpHcmService } from './http-hcm.service';
 import { MockHcmService } from './mock-hcm.service';
+
+const hcmModeLog = new Logger('HcmModule');
 
 @Module({
   providers: [
@@ -16,7 +18,12 @@ import { MockHcmService } from './mock-hcm.service';
         http: HttpHcmService,
       ) => {
         const base = config.get<string>('HCM_BASE_URL', '').trim();
-        return base ? http : memory;
+        if (base) {
+          hcmModeLog.log(`HCM: using HTTP client → ${base}`);
+          return http;
+        }
+        hcmModeLog.log('HCM: using in-process MockHcmService');
+        return memory;
       },
       inject: [ConfigService, MockHcmService, HttpHcmService],
     },

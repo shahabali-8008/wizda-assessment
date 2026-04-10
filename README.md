@@ -1,104 +1,112 @@
-**Time-Off API** — see the repository root [`README.md`](../README.md) for project context and assessment notes.
+# Time-Off Microservice (take-home)
 
-Optional **HTTP mock HCM** (second process): `npm run mock-hcm:http` — then set `HCM_BASE_URL=http://127.0.0.1:3099` in `.env`.
+NestJS + GraphQL + TypeORM + SQLite (`better-sqlite3`), per assessment requirements.
 
----
-
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
-
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## Quick start
 
 ```bash
-$ npm install
+cd api
+cp .env.example .env
+npm install
+npm run migration:run   # apply TypeORM migrations (schema is migration-driven; see below)
+npm run seed
+npm run build
+npm run start:prod
 ```
 
-## Compile and run the project
+Schema changes use **migrations** (`TYPEORM_SYNC` defaults to `false`). With `TYPEORM_MIGRATIONS_RUN=true`, pending migrations also run when the app boots; otherwise run `npm run migration:run` before start.
+
+### Mock HCM: two ways to run
+
+The API talks to HCM through an `HcmClient`. You can use either mode; behavior is the same contract, different transport.
+
+| Mode | When | What you do |
+|------|------|-------------|
+| **In-process (default)** | `HCM_BASE_URL` is **unset** in `.env` | Nothing extra. Nest uses **`MockHcmService`** inside the same Node process. This is what **`npm run start:dev`** uses out of the box. |
+| **HTTP mock server** | You set **`HCM_BASE_URL`** | **Terminal 1:** `cd api` → `npm run mock-hcm:http` (listens on **3099** by default, or set `MOCK_HCM_PORT`). **Terminal 2:** in `api/.env` set `HCM_BASE_URL=http://127.0.0.1:3099` (match the mock port). **Then** start the API (`npm run start:dev`). Nest uses **`HttpHcmService`** and calls the mock over HTTP. |
+
+To go back to in-process, remove or comment out `HCM_BASE_URL` and restart the API.
+
+### Domain tables
+
+| Table | Purpose |
+|--------|--------|
+| `employees` | People requesting time off (`email` unique). |
+| `locations` | Sites / dimensions (`code` unique). |
+| `balances` | Cached balance per **employee + location** (`days_remaining`, `last_synced_at`); unique on `(employee_id, location_id)`. |
+| `time_off_requests` | Request lifecycle (`start_date`, `end_date`, `requested_days`, `status`, optional `idempotency_key`). |
+
+**Endpoints**
+
+- **Health:** `GET http://localhost:3000/health` (no API key; for probes)
+- **GraphQL:** `POST http://localhost:3000/graphql` (Playground when `NODE` is not `production`)
+
+### API authentication (optional)
+
+If **`API_KEY`** is set in the environment, all GraphQL operations require:
+
+- Header **`X-Api-Key: <API_KEY>`**, or  
+- **`Authorization: Bearer <API_KEY>`**
+
+If **`API_KEY`** is **unset** or empty, GraphQL is open (default for local development and automated tests). With Playground and a key set, add the header in the HTTP headers section.
+
+Implementation: `api/src/auth/api-key.guard.ts` (global guard + `@Public()` on `HealthController`).
+
+### GraphQL (summary)
+
+| Operation | Kind | Purpose |
+|-----------|------|--------|
+| `ping` | query | Smoke test |
+| `balances(employeeId)` / `balance(employeeId, locationId)` | query | Cached balances |
+| `ingestHcmBatch(input)` | mutation | HCM batch sync → DB + mock HCM state |
+| `timeOffRequests(employeeId)` / `timeOffRequest(id)` | query | Requests |
+| `pendingTimeOffRequests(locationId)` | query | Optional `locationId`; lists `PENDING_MANAGER` |
+| `createTimeOffRequest(input)` | mutation | `DRAFT` request (optional `idempotencyKey`) |
+| `submitTimeOffRequest(id)` | mutation | Reconcile + eligibility → `PENDING_MANAGER` or `REJECTED` |
+| `approveTimeOffRequest(id)` / `rejectTimeOffRequest(id)` | mutation | Manager gate → HCM deduct (approve) or `REJECTED` (reject) |
+| `cancelTimeOffRequest(id)` | mutation | `DRAFT` → `CANCELLED` |
+
+**HCM** is abstracted as `HcmClient` (see **Mock HCM: two ways to run** above). Tune mock failure modes via `api/.env.example` (`HCM_FORCE_REJECT`, `HCM_SILENT_BAD_SUCCESS`, `HCM_SIMULATE_TIMEOUT`). After `npm run seed`, mock HCM balances match the DB.
+
+Development with hot reload:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+cd api
+npm run start:dev
 ```
 
-## Run tests
+## Environment
+
+See `api/.env.example`. Defaults create `api/data/timeoff.sqlite` (directory is created automatically).
+
+## Database migrations
+
+From `api/` (loads `.env` via `data-source.ts`):
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run migration:show
+npm run migration:run
+npm run migration:revert
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Generate after changing entities:
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run migration:generate -- src/database/migrations/DescribeChange
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Tests
 
-## Resources
+```bash
+cd api
+npm run test          # unit / integration (services, in-memory SQLite)
+npm run test:e2e      # HTTP + GraphQL (runInBand); includes API key + full flow tests
+npm run test:cov      # coverage report → api/coverage/ (enforces thresholds in package.json)
+npm run test:ci       # lint + build + unit + coverage + e2e (submission / CI)
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+Default e2e runs **without** `API_KEY`. The **`api-key.e2e-spec.ts`** suite sets `API_KEY` and checks reject/accept behavior.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+**Coverage:** Jest `coverageThreshold` requires **≥80%** statements/lines and **≥75%** branches/functions (global) on measured source; migrations, Nest module shells, DB wiring, and the **`graphql/`** tree are excluded from collection (see **`docs/TRD.md` §7** for rationale).
 
-## Support
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
